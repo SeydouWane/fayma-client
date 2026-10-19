@@ -1,108 +1,99 @@
-import { useState } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Login from './pages/Login';
-import ImportFacture from './pages/ImportFacture';
-import ExportFacture from './pages/ExportFacture';
-import './index.css';
+import { useCallback, useEffect, useState } from 'react';
+import './plateforme.css';
+import { getFournisseurs, getContexte, erreur } from './api/plateforme';
+import Integration from './pages/Integration';
+import Recuperation from './pages/Recuperation';
+import Fournisseurs from './pages/Fournisseurs';
 
-function Nav({ page, setPage }) {
-  const { user, logout } = useAuth();
-  return (
-    <nav style={styles.nav}>
-      <div style={styles.navLeft}>
-        <div style={styles.navLogo}>
-          <div style={styles.navLogoIcon}>F</div>
-          <span style={styles.navLogoText}>Fayma e-Invoice</span>
-        </div>
-        <div style={styles.navLinks}>
-          <button
-            onClick={() => setPage('import')}
-            style={{ ...styles.navLink, ...(page === 'import' ? styles.navLinkActive : {}) }}
-          >
-            ↑ Insérer une facture
-          </button>
-          <button
-            onClick={() => setPage('export')}
-            style={{ ...styles.navLink, ...(page === 'export' ? styles.navLinkActive : {}) }}
-          >
-            ↓ Mes factures
-          </button>
-        </div>
-      </div>
-      <div style={styles.navRight}>
-        <div style={styles.userInfo}>
-          <div style={styles.userAvatar}>
-            {user.nom?.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div style={styles.userName}>{user.nom}</div>
-            <div style={styles.userClient}>{user.clientName}</div>
-          </div>
-        </div>
-        <button onClick={logout} style={styles.logoutBtn}>Déconnexion</button>
-      </div>
-    </nav>
-  );
-}
-
-function AppInner() {
-  const { user } = useAuth();
-  const [page, setPage] = useState('import');
-  if (!user) return <Login />;
-  return (
-    <div style={{ minHeight: '100vh', background: '#f8f7f4' }}>
-      <Nav page={page} setPage={setPage} />
-      <main style={styles.main}>
-        {page === 'import' && <ImportFacture />}
-        {page === 'export' && <ExportFacture />}
-      </main>
-    </div>
-  );
-}
+const ONGLETS = [
+  { id: 'integration', label: 'Intégration' },
+  { id: 'recuperation', label: 'Récupération' },
+  { id: 'fournisseurs', label: 'Fournisseurs' },
+];
 
 export default function App() {
+  const [onglet, setOnglet] = useState('integration');
+  const [fournisseurs, setFournisseurs] = useState([]);
+  const [subsystem, setSubsystem] = useState('');
+  const [contexte, setContexte] = useState(null);
+  const [erreurCtx, setErreurCtx] = useState('');
+  const [version, setVersion] = useState(0);
+
+  const chargerFournisseurs = useCallback(async () => {
+    try {
+      const liste = await getFournisseurs();
+      setFournisseurs(liste);
+      setSubsystem((s) => (s && liste.some((f) => f.subsystem === s)
+        ? s
+        : liste.find((f) => f.statut === 'ACTIF')?.subsystem || ''));
+      setVersion((v) => v + 1);
+    } catch (e) {
+      setErreurCtx(erreur(e));
+    }
+  }, []);
+
+  useEffect(() => { chargerFournisseurs(); }, [chargerFournisseurs]);
+
+  useEffect(() => {
+    setContexte(null); setErreurCtx('');
+    if (!subsystem) return undefined;
+    let annule = false;
+    getContexte(subsystem)
+      .then((c) => { if (!annule) setContexte(c); })
+      .catch((e) => { if (!annule) setErreurCtx(erreur(e)); });
+    return () => { annule = true; };
+  }, [subsystem, version]);
+
   return (
-    <AuthProvider>
-      <AppInner />
-    </AuthProvider>
+    <>
+      <header className="entete">
+        <div>
+          <h1>Plateforme de test — Fayma × X-Road ABI</h1>
+          <div className="sous">Intégration et récupération de factures UBL 2.1 · identité fournisseur résolue via MOSIP / Keycloak</div>
+        </div>
+        <div>
+          <label>Fournisseur (subsystem X-Road)</label>
+          <select value={subsystem} onChange={(e) => setSubsystem(e.target.value)}>
+            <option value="">— choisir —</option>
+            {fournisseurs.map((f) => (
+              <option key={f.subsystem} value={f.subsystem}>
+                {f.subsystem} · {f.raison_sociale || ''}{f.statut !== 'ACTIF' ? ' (INACTIF)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </header>
+
+      {contexte && (
+        <div className="contexte">
+          <span>Fournisseur : <b>{contexte.nom}</b></span>
+          <span>NINEA : <b>{contexte.ninea || '—'}</b></span>
+          <span>Client Fayma : <b>{contexte.client_name} (#{contexte.active_client})</b></span>
+          <span>X-Road-Client : <b>{contexte.xroad_client}</b></span>
+          <span>UIN : <b>{contexte.uin || '—'}</b></span>
+        </div>
+      )}
+      {erreurCtx && <div className="contexte erreur">{erreurCtx}</div>}
+
+      <nav className="onglets">
+        {ONGLETS.map((o) => (
+          <button key={o.id} className={onglet === o.id ? 'actif' : ''} onClick={() => setOnglet(o.id)}>
+            {o.label}
+          </button>
+        ))}
+      </nav>
+
+      <main>
+        {onglet === 'integration' && <Integration subsystem={subsystem} contexte={contexte} />}
+        {onglet === 'recuperation' && <Recuperation subsystem={subsystem} contexte={contexte} />}
+        {onglet === 'fournisseurs' && (
+          <Fournisseurs
+            fournisseurs={fournisseurs}
+            onChange={chargerFournisseurs}
+            onSelect={(s) => { setSubsystem(s); setOnglet('integration'); }}
+          />
+        )}
+      </main>
+    </>
   );
 }
-
-const styles = {
-  nav: {
-    background: '#042C53', padding: '0 32px',
-    display: 'flex', alignItems: 'center',
-    justifyContent: 'space-between', height: '60px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-  },
-  navLeft: { display: 'flex', alignItems: 'center', gap: '32px' },
-  navLogo: { display: 'flex', alignItems: 'center', gap: '10px' },
-  navLogoIcon: {
-    width: '30px', height: '30px', background: '#378ADD',
-    borderRadius: '6px', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '16px',
-  },
-  navLogoText: { color: '#fff', fontWeight: '700', fontSize: '16px' },
-  navLinks: { display: 'flex', gap: '4px' },
-  navLink: {
-    padding: '6px 16px', border: 'none', borderRadius: '6px',
-    fontSize: '14px', fontWeight: '500', cursor: 'pointer',
-    background: 'transparent', color: '#B5D4F4',
-  },
-  navLinkActive: { background: '#185FA5', color: '#fff' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  userInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
-  userAvatar: {
-    width: '32px', height: '32px', background: '#378ADD',
-    borderRadius: '50%', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '14px',
-  },
-  userName: { color: '#fff', fontSize: '14px', fontWeight: '500' },
-  userClient: { color: '#B5D4F4', fontSize: '12px' },
-  logoutBtn: {
-    padding: '6px 14px', background: 'rgba(255,255,255,0.1)',
-    color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: '6px', fontSize: '13px', cursor: 'pointer',
-  },
-  main: { padding: '32px 24px' },
-};

@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API_KEY = 'mw-force-n-erp';
 
-const MIDDLEWARE_URL = 'http://127.0.0.1:8001/api/v1';
+const MIDDLEWARE_URL = 'http://51.38.224.210/api/v1';
 const KEYCLOAK_URL = '/keycloak/realms/fayma/protocol/openid-connect/token';
 
 // ── Authentification Keycloak ─────────────────────────────────────────────
