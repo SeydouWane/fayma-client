@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import './plateforme.css';
+import './ocr.css';
 import { getFournisseurs, getContexte, erreur } from './api/plateforme';
 import Integration from './pages/Integration';
+import FactureOCR from './pages/FactureOCR';
 import Recuperation from './pages/Recuperation';
 import Fournisseurs from './pages/Fournisseurs';
 
 const ONGLETS = [
   { id: 'integration', label: 'Intégration' },
+  { id: 'ocr', label: 'Facture PDF (OCR)' },
   { id: 'recuperation', label: 'Récupération' },
   { id: 'fournisseurs', label: 'Fournisseurs' },
 ];
@@ -85,6 +88,7 @@ export default function App() {
 
       <main>
         {onglet === 'integration' && <Integration subsystem={subsystem} contexte={contexte} />}
+        {onglet === 'ocr' && <FactureOCR subsystem={subsystem} contexte={contexte} />}
         {onglet === 'recuperation' && <Recuperation subsystem={subsystem} contexte={contexte} />}
         {onglet === 'fournisseurs' && (
           <Fournisseurs
